@@ -1,9 +1,14 @@
 package com.project.shopapp.controllers;
 
 import com.project.shopapp.dtos.*;
+import com.project.shopapp.models.Product;
+import com.project.shopapp.models.ProductImage;
+import com.project.shopapp.services.IProductService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.ui.Model;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -21,27 +26,43 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("api/v1/products")
+@RequestMapping("${api.prefix}/products")
+@RequiredArgsConstructor
 public class ProductController {
-    @PostMapping(value = "",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)////consumes sử dụng khi bạn muốn gửi dữ liệu nhiều phần trong một yêu cầu HTTP
+    private final IProductService productService;
+    @PostMapping("")
     //POST http://localhost:8088/v1/api/products
     public ResponseEntity<?> createProduct(
-            @Valid @ModelAttribute ProductDTO productDTO,
-            BindingResult result//lưu tất cả các lỗi , bạn có thể kiểm tra và xử lý các lỗi kiểm tra dữ liệu một cách dễ dàng và cung cấp phản hồi chi tiết cho người dùng về các vấn đề đầu vào.
+            @Valid @RequestBody ProductDTO productDTO,
+            BindingResult result //lưu tất cả các lỗi , bạn có thể kiểm tra và xử lý các lỗi kiểm tra dữ liệu một cách dễ dàng và cung cấp phản hồi chi tiết cho người dùng về các vấn đề đầu vào.
     ) {
         try {
-            if(result.hasErrors()) {////Kiểm tra xem có lỗi kiểm tra dữ liệu nào không
-                List<String> errorMessages = result.getFieldErrors()////Lấy danh sách các FieldError từ BindingResult.
-                        .stream()////Tạo một luồng (stream) từ danh sách các FieldError.
-                        .map(FieldError::getDefaultMessage)////Lấy thông báo lỗi mặc định từ mỗi FieldError.
-                        .toList();////Thu thập các thông báo lỗi vào một danh sách.
-                return ResponseEntity.badRequest().body(errorMessages);////sử dụng để trả về một phản hồi HTTP với mã trạng thái 400 (Bad Request) cùng với một nội dung cụ thể trong phần thân của phản hồi (body).
+            if(result.hasErrors()) {//Kiểm tra xem có lỗi kiểm tra dữ liệu nào không
+                List<String> errorMessages = result.getFieldErrors()//Lấy danh sách các FieldError từ BindingResult.
+                        .stream()//Tạo một luồng (stream) từ danh sách các FieldError.
+                        .map(FieldError::getDefaultMessage)//Thu thập các thông báo lỗi vào một danh sách.
+                        .toList();
+                return ResponseEntity.badRequest().body(errorMessages);//sử dụng để trả về một phản hồi HTTP với mã trạng thái 400 (Bad Request) cùng với một nội dung cụ thể trong phần thân của phản hồi (body).
             }
-            List<MultipartFile> files = productDTO.getFiles();
-            files = files == null ? new ArrayList<MultipartFile>() : files;////nếu không có file thì tạo mảng rỗng ngược lại thì vẫn lấy file
-            for (MultipartFile file : files) {
-                if(file.getSize() == 0) {//nếu getSize== 0 thì continue
+            Product newProduct = productService.createProduct(productDTO);//tạo newProduct
+            return ResponseEntity.ok(newProduct);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+    @PostMapping(value = "uploads/{id}",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)///consumes sử dụng khi bạn muốn gửi dữ liệu nhiều phần trong một yêu cầu HTTP
+    //POST http://localhost:8088/v1/api/products
+    public ResponseEntity<?> uploadImages(
+            @PathVariable("id") Long productId,
+            @ModelAttribute("files") List<MultipartFile> files
+    ){
+        try {
+            Product existingProduct = productService.getProductById(productId);
+            files = files == null ? new ArrayList<MultipartFile>() : files;//nếu không có file thì tạo mảng rỗng ngược lại thì vẫn lấy file
+            List<ProductImage> productImages = new ArrayList<>();
+            for (MultipartFile file : files) {//nếu getSize== 0 thì thoát vòng for
+                if(file.getSize() == 0) {
                     continue;
                 }
                 // Kiểm tra kích thước file và định dạng
@@ -56,10 +77,16 @@ public class ProductController {
                 }
                 // Lưu file và cập nhật thumbnail trong DTO
                 String filename = storeFile(file); // Thay thế hàm này với code của bạn để lưu file
-                //lưu vào đối tượng product trong DB => sẽ làm sau
-                //lưu vào bảng product_images
+                //lưu vào đối tượng product trong DB
+                ProductImage productImage = productService.createProductImage(
+                        existingProduct.getId(),
+                        ProductImageDTO.builder()
+                                .imageUrl(filename)
+                                .build()
+                );
+                productImages.add(productImage);
             }
-            return ResponseEntity.ok("Product created successfully");
+            return ResponseEntity.ok().body(productImages);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -69,7 +96,7 @@ public class ProductController {
         // Thêm UUID vào trước tên file để đảm bảo tên file là duy nhất
         String uniqueFilename = UUID.randomUUID().toString() + "_" + filename;
         // Đường dẫn đến thư mục mà bạn muốn lưu file
-        java.nio.file.Path uploadDir = Paths.get("uploads");//tự động tạo uploads
+        java.nio.file.Path uploadDir = Paths.get("uploads");
         // Kiểm tra và tạo thư mục nếu nó không tồn tại
         if (!Files.exists(uploadDir)) {
             Files.createDirectories(uploadDir);
