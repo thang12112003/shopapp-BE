@@ -15,26 +15,27 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
-@Service// Các service thường chứa logic nghiệp vụ và xử lý các yêu cầu từ các lớp controller.
+@Service
 @RequiredArgsConstructor
 public class ProductService implements IProductService{
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductImageRepository productImageRepository;
     @Override
+    @Transactional
     public Product createProduct(ProductDTO productDTO) throws DataNotFoundException {
-        // Lấy thông tin category từ repository dựa vào categoryId trong productDTO
-        Category existingCategory = categoryRepository// tìm category theo categoryId từ productDTO.
+        Category existingCategory = categoryRepository
                 .findById(productDTO.getCategoryId())
                 .orElseThrow(() ->
                         new DataNotFoundException(
                                 "Cannot find category with id: "+productDTO.getCategoryId()));
 
-        // Tạo một đối tượng Product mới từ thông tin trong productDTO
-        Product newProduct = Product.builder()//ánh xạ từ productDTO sang newProduct
+        Product newProduct = Product.builder()
                 .name(productDTO.getName())
                 .price(productDTO.getPrice())
                 .thumbnail(productDTO.getThumbnail())
@@ -45,22 +46,29 @@ public class ProductService implements IProductService{
     }
 
     @Override
-    //ấy thông tin sản phẩm (product) dựa trên ID sản phẩm
     public Product getProductById(long productId) throws Exception {
-        return productRepository.findById(productId).//Phương thức findById trả về một đối tượng Optional<Product>.
-                orElseThrow(()-> new DataNotFoundException(
-                        "Cannot find product with id ="+productId));
+        Optional<Product> optionalProduct = productRepository.getDetailProduct(productId);
+        if(optionalProduct.isPresent()) {
+            return optionalProduct.get();
+        }
+        throw new DataNotFoundException("Cannot find product with id =" + productId);
+    }
+    @Override
+    public List<Product> findProductsByIds(List<Long> productIds) {
+        return productRepository.findProductsByIds(productIds);
     }
 
-    @Override
-    public Page<ProductResponse> getAllProducts(PageRequest pageRequest) {
-        // Lấy danh sách sản phẩm theo trang(page) và giới hạn(limit)
-        return productRepository
-                .findAll(pageRequest)
-                .map(ProductResponse::fromProduct);
-    }
 
     @Override
+    public Page<ProductResponse> getAllProducts(String keyword,
+                                                Long categoryId, PageRequest pageRequest) {
+        // Lấy danh sách sản phẩm theo trang (page), giới hạn (limit), và categoryId (nếu có)
+        Page<Product> productsPage;
+        productsPage = productRepository.searchProducts(categoryId, keyword, pageRequest);
+        return productsPage.map(ProductResponse::fromProduct);
+    }
+    @Override
+    @Transactional
     public Product updateProduct(
             long id,
             ProductDTO productDTO
@@ -70,7 +78,7 @@ public class ProductService implements IProductService{
         if(existingProduct != null) {
             //copy các thuộc tính từ DTO -> Product
             //Có thể sử dụng ModelMapper
-            Category existingCategory = categoryRepository//tìm category theo categoryId từ productDTO.
+            Category existingCategory = categoryRepository
                     .findById(productDTO.getCategoryId())
                     .orElseThrow(() ->
                             new DataNotFoundException(
@@ -87,8 +95,9 @@ public class ProductService implements IProductService{
     }
 
     @Override
+    @Transactional
     public void deleteProduct(long id) {
-        Optional<Product> optionalProduct = productRepository.findById(id);// được sử dụng để đại diện cho một giá trị có thể có hoặc không có, tránh việc sử dụng giá trị null và giúp xử lý các tình huống mà giá trị có thể không tồn tại một cách an toàn hơn.
+        Optional<Product> optionalProduct = productRepository.findById(id);
         optionalProduct.ifPresent(productRepository::delete);
     }
 
@@ -97,6 +106,7 @@ public class ProductService implements IProductService{
         return productRepository.existsByName(name);
     }
     @Override
+    @Transactional
     public ProductImage createProductImage(
             Long productId,
             ProductImageDTO productImageDTO) throws Exception {
@@ -112,8 +122,11 @@ public class ProductService implements IProductService{
         //Ko cho insert quá 5 ảnh cho 1 sản phẩm
         int size = productImageRepository.findByProductId(productId).size();
         if(size >= ProductImage.MAXIMUM_IMAGES_PER_PRODUCT) {
-            throw new InvalidParamException("Number of images must be <= " + ProductImage.MAXIMUM_IMAGES_PER_PRODUCT);
+            throw new InvalidParamException(
+                    "Number of images must be <= "
+                            +ProductImage.MAXIMUM_IMAGES_PER_PRODUCT);
         }
         return productImageRepository.save(newProductImage);
     }
+
 }

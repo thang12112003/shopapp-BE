@@ -1,13 +1,17 @@
 package com.project.shopapp.controllers;
 
 import com.github.javafaker.Faker;
+import com.project.shopapp.components.LocalizationUtils;
 import com.project.shopapp.dtos.*;
 import com.project.shopapp.models.Product;
 import com.project.shopapp.models.ProductImage;
 import com.project.shopapp.responses.ProductListResponse;
 import com.project.shopapp.responses.ProductResponse;
 import com.project.shopapp.services.IProductService;
+import com.project.shopapp.utils.MessageKeys;
+import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -27,38 +31,38 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("${api.prefix}/products")
 @RequiredArgsConstructor
 public class ProductController {
     private final IProductService productService;
+    private final LocalizationUtils localizationUtils;
+
     @PostMapping("")
     //POST http://localhost:8088/v1/api/products
     public ResponseEntity<?> createProduct(
             @Valid @RequestBody ProductDTO productDTO,
-            BindingResult result //lưu tất cả các lỗi , bạn có thể kiểm tra và xử lý các lỗi kiểm tra dữ liệu một cách dễ dàng và cung cấp phản hồi chi tiết cho người dùng về các vấn đề đầu vào.
+            BindingResult result
     ) {
         try {
-            if(result.hasErrors()) {//Kiểm tra xem có lỗi kiểm tra dữ liệu nào không
-                List<String> errorMessages = result.getFieldErrors()//Lấy danh sách các FieldError từ BindingResult.
-                        .stream()//Tạo một luồng (stream) từ danh sách các FieldError.
-                        .map(FieldError::getDefaultMessage)//Thu thập các thông báo lỗi vào một danh sách.
+            if(result.hasErrors()) {
+                List<String> errorMessages = result.getFieldErrors()
+                        .stream()
+                        .map(FieldError::getDefaultMessage)
                         .toList();
-                return ResponseEntity.badRequest().body(errorMessages);//sử dụng để trả về một phản hồi HTTP với mã trạng thái 400 (Bad Request) cùng với một nội dung cụ thể trong phần thân của phản hồi (body).
+                return ResponseEntity.badRequest().body(errorMessages);
             }
-            Product newProduct = productService.createProduct(productDTO);//tạo newProduct
+            Product newProduct = productService.createProduct(productDTO);
             return ResponseEntity.ok(newProduct);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
     @PostMapping(value = "uploads/{id}",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)///consumes sử dụng khi bạn muốn gửi dữ liệu nhiều phần trong một yêu cầu HTTP
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     //POST http://localhost:8088/v1/api/products
     public ResponseEntity<?> uploadImages(
             @PathVariable("id") Long productId,
@@ -66,24 +70,26 @@ public class ProductController {
     ){
         try {
             Product existingProduct = productService.getProductById(productId);
-            files = files == null ? new ArrayList<MultipartFile>() : files;//nếu không có file thì tạo mảng rỗng ngược lại thì vẫn lấy file
-            if (files.size() >  ProductImage.MAXIMUM_IMAGES_PER_PRODUCT){
-                return ResponseEntity.badRequest().body("You can only upload maximum 5 images");
+            files = files == null ? new ArrayList<MultipartFile>() : files;
+            if(files.size() > ProductImage.MAXIMUM_IMAGES_PER_PRODUCT) {
+                return ResponseEntity.badRequest().body(localizationUtils
+                        .getLocalizedMessage(MessageKeys.UPLOAD_IMAGES_MAX_5));
             }
             List<ProductImage> productImages = new ArrayList<>();
-            for (MultipartFile file : files) {//nếu getSize== 0 thì thoát vòng for
+            for (MultipartFile file : files) {
                 if(file.getSize() == 0) {
                     continue;
                 }
                 // Kiểm tra kích thước file và định dạng
                 if(file.getSize() > 10 * 1024 * 1024) { // Kích thước > 10MB
                     return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                            .body("File is too large! Maximum size is 10MB");
+                            .body(localizationUtils
+                                    .getLocalizedMessage(MessageKeys.UPLOAD_IMAGES_FILE_LARGE));
                 }
                 String contentType = file.getContentType();
                 if(contentType == null || !contentType.startsWith("image/")) {
                     return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                            .body("File must be an image");
+                            .body(localizationUtils.getLocalizedMessage(MessageKeys.UPLOAD_IMAGES_FILE_MUST_BE_IMAGE));
                 }
                 // Lưu file và cập nhật thumbnail trong DTO
                 String filename = storeFile(file); // Thay thế hàm này với code của bạn để lưu file
@@ -101,8 +107,27 @@ public class ProductController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+    @GetMapping("/images/{imageName}")
+    public ResponseEntity<?> viewImage(@PathVariable String imageName) {
+        try {
+            java.nio.file.Path imagePath = Paths.get("uploads/"+imageName);
+            UrlResource resource = new UrlResource(imagePath.toUri());
+
+            if (resource.exists()) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.IMAGE_JPEG)
+                        .body(resource);
+            } else {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.IMAGE_JPEG)
+                        .body(new UrlResource(Paths.get("uploads/notfound.jpg").toUri()));
+                //return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
     private String storeFile(MultipartFile file) throws IOException {
-        //kiẻm tra xem có isImageFile không và file.getOriginalFilename khác null
         if (!isImageFile(file) || file.getOriginalFilename() == null) {
             throw new IOException("Invalid image format");
         }
@@ -126,18 +151,22 @@ public class ProductController {
         return contentType != null && contentType.startsWith("image/");
     }
     @GetMapping("")
-    public ResponseEntity<ProductListResponse> getProducts(//tùy biến trả về 1 danh sách, có thể trả về 1 danh sách cumtom mà không động đến model
-            @RequestParam("page")     int page,
-            @RequestParam("limit")    int limit
+    public ResponseEntity<ProductListResponse> getProducts(
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "0", name = "category_id") Long categoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int limit
     ) {
         // Tạo Pageable từ thông tin trang và giới hạn
         PageRequest pageRequest = PageRequest.of(
                 page, limit,
-                Sort.by("createdAt").descending());
-        Page<ProductResponse> productPage = productService.getAllProducts(pageRequest);
+                //Sort.by("createdAt").descending()
+                Sort.by("id").ascending()
+        );
+        Page<ProductResponse> productPage = productService.getAllProducts(keyword, categoryId, pageRequest);
         // Lấy tổng số trang
         int totalPages = productPage.getTotalPages();
-        List<ProductResponse> products = productPage.getContent();////sử dụng để lấy danh sách các thực thể Product từ một đối tượng Page<Product>
+        List<ProductResponse> products = productPage.getContent();
         return ResponseEntity.ok(ProductListResponse
                 .builder()
                 .products(products)
@@ -155,18 +184,33 @@ public class ProductController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
+
     }
-    @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteProduct(@PathVariable long id) {
+    @GetMapping("/by-ids")
+    public ResponseEntity<?> getProductsByIds(@RequestParam("ids") String ids) {
+        //eg: 1,3,5,7
         try {
-           productService.deleteProduct(id);
-            return ResponseEntity.ok(String.format("Product with id = %d deleted successfully", id));
+            // Tách chuỗi ids thành một mảng các số nguyên
+            List<Long> productIds = Arrays.stream(ids.split(","))//biếm chuỗi thành mảng
+                    .map(Long::parseLong)
+                    .collect(Collectors.toList());
+            List<Product> products = productService.findProductsByIds(productIds);
+            return ResponseEntity.ok(products);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-//    @PostMapping("/generateFakeProducts")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteProduct(@PathVariable long id) {
+        try {
+            productService.deleteProduct(id);
+            return ResponseEntity.ok(String.format("Product with id = %d deleted successfully", id));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+    //@PostMapping("/generateFakeProducts")
     private ResponseEntity<String> generateFakeProducts() {
         Faker faker = new Faker();
         for (int i = 0; i < 1_000_000; i++) {
@@ -189,5 +233,16 @@ public class ProductController {
         }
         return ResponseEntity.ok("Fake Products created successfully");
     }
-
+    //update a product
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateProduct(
+            @PathVariable long id,
+            @RequestBody ProductDTO productDTO) {
+        try {
+            Product updatedProduct = productService.updateProduct(id, productDTO);
+            return ResponseEntity.ok(updatedProduct);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
 }

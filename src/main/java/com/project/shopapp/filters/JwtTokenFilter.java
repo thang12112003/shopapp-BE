@@ -1,6 +1,6 @@
 package com.project.shopapp.filters;
 
-import com.project.shopapp.components.JwtTokenUtil;
+import com.project.shopapp.components.JwtTokenUtils;
 import com.project.shopapp.models.User;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -27,7 +27,7 @@ public class JwtTokenFilter extends OncePerRequestFilter{
     @Value("${api.prefix}")
     private String apiPrefix;
     private final UserDetailsService userDetailsService;//thông tin chi tiết người dùng từ cơ sở dữ liệu.
-    private final JwtTokenUtil jwtTokenUtil;//tiện ích để làm việc với JWT, chẳng hạn như tạo, xác thực và trích xuất thông tin từ JWT.
+    private final JwtTokenUtils jwtTokenUtil;//tiện ích để làm việc với JWT, chẳng hạn như tạo, xác thực và trích xuất thông tin từ JWT.
     @Override
     protected void doFilterInternal(@NonNull  HttpServletRequest request,//Nó xử lý từng yêu cầu HTTP để kiểm tra và xác thực JWT.
                                     @NonNull HttpServletResponse response,
@@ -65,19 +65,27 @@ public class JwtTokenFilter extends OncePerRequestFilter{
         }
 
     }
-    private boolean isBypassToken(@NonNull  HttpServletRequest request) {//không cần kiểm tra
+    private boolean isBypassToken(@NonNull HttpServletRequest request) {//không cần kiểm tra token
         final List<Pair<String, String>> bypassTokens = Arrays.asList(
+                Pair.of(String.format("%s/roles", apiPrefix), "GET"),
                 Pair.of(String.format("%s/products", apiPrefix), "GET"),
+                Pair.of(String.format("%s/orders", apiPrefix), "GET"),
                 Pair.of(String.format("%s/categories", apiPrefix), "GET"),
                 Pair.of(String.format("%s/users/register", apiPrefix), "POST"),
-                Pair.of(String.format("%s/users/login", apiPrefix), "POST")
-        );
-        for(Pair<String, String> bypassToken: bypassTokens) {
-            if (request.getServletPath().contains(bypassToken.getFirst()) &&//Kiểm tra xem phương thức yêu cầu có khớp với phương thức bỏ qua không.
+                Pair.of(String.format("%s/users/login", apiPrefix), "POST"),
+                Pair.of(String.format("%s/products/uploads/", apiPrefix), "POST")//thêm ảnh qua postman
+                );
+
+        for (Pair<String, String> bypassToken : bypassTokens) {
+            if (request.getServletPath().contains(bypassToken.getFirst()) &&
                     request.getMethod().equals(bypassToken.getSecond())) {
-                return true;// Trả về true nếu yêu cầu được bỏ qua kiểm tra.
+                return true;
             }
         }
-        return false;//Trả về false nếu yêu cầu không được bỏ qua kiểm tra.
+
+
+
+        return false;
     }
+
 }
