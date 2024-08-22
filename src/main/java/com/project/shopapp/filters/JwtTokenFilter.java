@@ -15,7 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.filter.*;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -23,69 +23,81 @@ import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+
 public class JwtTokenFilter extends OncePerRequestFilter{
     @Value("${api.prefix}")
     private String apiPrefix;
-    private final UserDetailsService userDetailsService;//thông tin chi tiết người dùng từ cơ sở dữ liệu.
-    private final JwtTokenUtils jwtTokenUtil;//tiện ích để làm việc với JWT, chẳng hạn như tạo, xác thực và trích xuất thông tin từ JWT.
+    private final UserDetailsService userDetailsService;
+    private final JwtTokenUtils jwtTokenUtil;
     @Override
-    protected void doFilterInternal(@NonNull  HttpServletRequest request,//Nó xử lý từng yêu cầu HTTP để kiểm tra và xác thực JWT.
+    protected void doFilterInternal(@NonNull  HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain)
             throws ServletException, IOException {
         try {
-            if(isBypassToken(request)) {//Kiểm tra xem yêu cầu có được phép bỏ qua kiểm tra JWT không.
+            if(isBypassToken(request)) {
                 filterChain.doFilter(request, response); //enable bypass
                 return;
             }
-            final String authHeader = request.getHeader("Authorization");//Lấy tiêu đề Authorization từ yêu cầu.
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {//Kiểm tra xem tiêu đề có bắt đầu bằng Bearer không.
+            final String authHeader = request.getHeader("Authorization");
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
                 return;
             }
-            final String token = authHeader.substring(7);//Bỏ qua phần "Bearer " để lấy token thực tế.
-            final String phoneNumber = jwtTokenUtil.extractPhoneNumber(token);//Trích xuất số điện thoại từ token.
+            final String token = authHeader.substring(7);
+            final String phoneNumber = jwtTokenUtil.extractPhoneNumber(token);
             if (phoneNumber != null
-                    && SecurityContextHolder.getContext().getAuthentication() == null) {//Kiểm tra xem có người dùng đã xác thực trong ngữ cảnh bảo mật chưa.
-                User userDetails = (User) userDetailsService.loadUserByUsername(phoneNumber);//Tải thông tin người dùng từ số điện thoại.
-                if(jwtTokenUtil.validateToken(token, userDetails)) {// Xác thực token với thông tin người dùng.
-                    UsernamePasswordAuthenticationToken authenticationToken =//Tạo đối tượng xác thực với thông tin người dùng.
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
+                User userDetails = (User) userDetailsService.loadUserByUsername(phoneNumber);
+                if(jwtTokenUtil.validateToken(token, userDetails)) {
+                    UsernamePasswordAuthenticationToken authenticationToken =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails,
                                     null,
                                     userDetails.getAuthorities()
                             );
-                    authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));// Thiết lập chi tiết xác thực cho đối tượng.
-                    SecurityContextHolder.getContext().setAuthentication(authenticationToken);// Thiết lập ngữ cảnh bảo mật với đối tượng xác thực.
+                    authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authenticationToken);
                 }
             }
-            filterChain.doFilter(request, response); //enable bypass, // Tiếp tục xử lý chuỗi bộ lọc
+            filterChain.doFilter(request, response); //enable bypass
         }catch (Exception e) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         }
 
     }
-    private boolean isBypassToken(@NonNull HttpServletRequest request) {//không cần kiểm tra token
+    private boolean isBypassToken(@NonNull HttpServletRequest request) {
         final List<Pair<String, String>> bypassTokens = Arrays.asList(
                 Pair.of(String.format("%s/roles", apiPrefix), "GET"),
+                Pair.of(String.format("%s/healthcheck/health", apiPrefix), "GET"),
+                Pair.of(String.format("%s/roles", apiPrefix), "GET"),
                 Pair.of(String.format("%s/products", apiPrefix), "GET"),
-                Pair.of(String.format("%s/orders", apiPrefix), "GET"),
                 Pair.of(String.format("%s/categories", apiPrefix), "GET"),
                 Pair.of(String.format("%s/users/register", apiPrefix), "POST"),
-                Pair.of(String.format("%s/users/login", apiPrefix), "POST"),
-                Pair.of(String.format("%s/products/uploads/", apiPrefix), "POST")//thêm ảnh qua postman
-                );
+                Pair.of(String.format("%s/users/login", apiPrefix), "POST")
+        );
 
+        String requestPath = request.getServletPath();
+        String requestMethod = request.getMethod();
+
+        if (requestPath.startsWith(String.format("/%s/orders", apiPrefix))
+                && requestMethod.equals("GET")) {
+            // Check if the requestPath matches the desired pattern
+            if (requestPath.matches(String.format("/%s/orders/\\d+", apiPrefix))) {
+                return true;
+            }
+            // If the requestPath is just "%s/orders", return true
+            if (requestPath.equals(String.format("/%s/orders", apiPrefix))) {
+                return true;
+            }
+        }
         for (Pair<String, String> bypassToken : bypassTokens) {
-            if (request.getServletPath().contains(bypassToken.getFirst()) &&
-                    request.getMethod().equals(bypassToken.getSecond())) {
+            if (requestPath.contains(bypassToken.getFirst())
+                    && requestMethod.equals(bypassToken.getSecond())) {
                 return true;
             }
         }
 
-
-
         return false;
     }
-
 }

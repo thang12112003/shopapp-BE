@@ -2,6 +2,8 @@ package com.project.shopapp.services;
 
 import com.project.shopapp.dtos.CartItemDTO;
 import com.project.shopapp.dtos.OrderDTO;
+import com.project.shopapp.dtos.OrderDetailDTO;
+import com.project.shopapp.dtos.OrderWithDetailsDTO;
 import com.project.shopapp.exceptions.DataNotFoundException;
 import com.project.shopapp.models.*;
 import com.project.shopapp.repositories.OrderDetailRepository;
@@ -11,13 +13,13 @@ import com.project.shopapp.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.weaver.ast.Or;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
-
-import static java.time.LocalDate.now;
 
 @Service
 @RequiredArgsConstructor
@@ -45,12 +47,12 @@ public class OrderService implements IOrderService{
         Order order = new Order();
         modelMapper.map(orderDTO, order);
         order.setUser(user);
-        order.setOrderDate(now());//lấy thời điểm hiện tại
+        order.setOrderDate(LocalDate.now());//lấy thời điểm hiện tại
         order.setStatus(OrderStatus.PENDING);
         //Kiểm tra shipping date phải >= ngày hôm nay
         LocalDate shippingDate = orderDTO.getShippingDate() == null
-                ? now() : orderDTO.getShippingDate();
-        if (shippingDate.isBefore(now())) {
+                ? LocalDate.now() : orderDTO.getShippingDate();
+        if (shippingDate.isBefore(LocalDate.now())) {
             throw new DataNotFoundException("Date must be at least today !");
         }
         order.setShippingDate(shippingDate);
@@ -87,10 +89,31 @@ public class OrderService implements IOrderService{
         orderDetailRepository.saveAll(orderDetails);
         return order;
     }
+    @Transactional
+    public Order updateOrderWithDetails(OrderWithDetailsDTO orderWithDetailsDTO) {
+        modelMapper.typeMap(OrderWithDetailsDTO.class, Order.class)
+                .addMappings(mapper -> mapper.skip(Order::setId));
+        Order order = new Order();
+        modelMapper.map(orderWithDetailsDTO, order);
+        Order savedOrder = orderRepository.save(order);
 
+        // Set the order for each order detail
+        for (OrderDetailDTO orderDetailDTO : orderWithDetailsDTO.getOrderDetailDTOS()) {
+            //orderDetail.setOrder(OrderDetail);
+        }
+
+        // Save or update the order details
+        List<OrderDetail> savedOrderDetails = orderDetailRepository.saveAll(order.getOrderDetails());
+
+        // Set the updated order details for the order
+        savedOrder.setOrderDetails(savedOrderDetails);
+
+        return savedOrder;
+    }
     @Override
     public Order getOrder(Long id) {
-        return orderRepository.findById(id).orElse(null);
+        Order selectedOrder = orderRepository.findById(id).orElse(null);
+        return selectedOrder;
     }
 
     @Override
@@ -121,9 +144,13 @@ public class OrderService implements IOrderService{
             orderRepository.save(order);
         }
     }
-
     @Override
     public List<Order> findByUserId(Long userId) {
         return orderRepository.findByUserId(userId);
+    }
+
+    @Override
+    public Page<Order> getOrdersByKeyword(String keyword, Pageable pageable) {
+        return orderRepository.findByKeyword(keyword, pageable);
     }
 }

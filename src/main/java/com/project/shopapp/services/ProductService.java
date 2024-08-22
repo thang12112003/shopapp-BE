@@ -124,7 +124,7 @@ public class ProductService implements IProductService{
         if(size >= ProductImage.MAXIMUM_IMAGES_PER_PRODUCT) {
             throw new InvalidParamException(
                     "Number of images must be <= "
-                            +ProductImage.MAXIMUM_IMAGES_PER_PRODUCT);
+                    +ProductImage.MAXIMUM_IMAGES_PER_PRODUCT);
         }
         return productImageRepository.save(newProductImage);
     }

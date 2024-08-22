@@ -8,7 +8,7 @@ import lombok.*;
 import java.util.Date;
 
 @Data
-@Builder//tự động tạo ra một builder pattern cho class.
+@Builder
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
@@ -18,8 +18,7 @@ public class UserDTO {
     private String fullName;
 
     @JsonProperty("phone_number")
-    @NotBlank(message = "Phone number is required")//@NotBlank Kiểm tra cả null và chuỗi rỗng.Chỉ áp dụng cho kiểu String.
-
+    @NotBlank(message = "Phone number is required")
     private String phoneNumber;
 
     private String address;
@@ -27,7 +26,6 @@ public class UserDTO {
     @NotBlank(message = "Password cannot be blank")
     private String password;
 
-    //nhập lại mật khẩu
     @JsonProperty("retype_password")
     private String retypePassword;
 
@@ -40,8 +38,7 @@ public class UserDTO {
     @JsonProperty("google_account_id")
     private int googleAccountId;
 
-    //vai trò là gì admin hay user
-    @NotNull(message = "Role ID is required")//@NotNull Chỉ kiểm tra xem giá trị có null hay không.
+    @NotNull(message = "Role ID is required")
     @JsonProperty("role_id")
     private Long roleId;
 }

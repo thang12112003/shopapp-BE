@@ -38,7 +38,6 @@ public class OrderDetailController {
             @Valid @PathVariable("id") Long id) throws DataNotFoundException {
         OrderDetail orderDetail = orderDetailService.getOrderDetail(id);
         return ResponseEntity.ok().body(OrderDetailResponse.fromOrderDetail(orderDetail));
-        //return ResponseEntity.ok(orderDetail);
     }
     //lấy ra danh sách các order_details của 1 order nào đó
     @GetMapping("/order/{orderId}")
@@ -70,6 +69,5 @@ public class OrderDetailController {
         return ResponseEntity.ok()
                 .body(localizationUtils
                         .getLocalizedMessage(MessageKeys.DELETE_ORDER_DETAIL_SUCCESSFULLY));
-        //return ResponseEntity.noContent().build();
     }
 }

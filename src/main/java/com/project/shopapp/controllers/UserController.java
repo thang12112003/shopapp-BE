@@ -1,5 +1,6 @@
 package com.project.shopapp.controllers;
 
+import com.project.shopapp.models.Role;
 import com.project.shopapp.models.User;
 import com.project.shopapp.responses.LoginResponse;
 import com.project.shopapp.responses.RegisterResponse;
@@ -60,10 +61,6 @@ public class UserController {
         }
     }
 
-    /*
-    Thêm tk admin
-    * */
-
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody UserLoginDTO userLoginDTO
@@ -77,8 +74,8 @@ public class UserController {
             );
             // Trả về token trong response
             return ResponseEntity.ok(LoginResponse.builder()
-                    .message(localizationUtils.getLocalizedMessage(MessageKeys.LOGIN_SUCCESSFULLY))
-                    .token(token)
+                            .message(localizationUtils.getLocalizedMessage(MessageKeys.LOGIN_SUCCESSFULLY))
+                            .token(token)
                     .build());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(
@@ -88,7 +85,6 @@ public class UserController {
             );
         }
     }
-
     @PostMapping("/details")
     public ResponseEntity<UserResponse> getUserDetails(
             @RequestHeader("Authorization") String authorizationHeader
@@ -101,7 +97,6 @@ public class UserController {
             return ResponseEntity.badRequest().build();
         }
     }
-
     @PutMapping("/details/{userId}")
     public ResponseEntity<UserResponse> updateUserDetails(
             @PathVariable Long userId,
@@ -110,7 +105,7 @@ public class UserController {
     ) {
         try {
             String extractedToken = authorizationHeader.substring(7);
-            User user = userService.    getUserDetailsFromToken(extractedToken);
+            User user = userService.getUserDetailsFromToken(extractedToken);
             // Ensure that the user making the request matches the user being updated
             if (user.getId() != userId) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();

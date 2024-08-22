@@ -11,6 +11,8 @@ import com.project.shopapp.services.IProductService;
 import com.project.shopapp.utils.MessageKeys;
 import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -38,6 +40,7 @@ import java.util.stream.Collectors;
 @RequestMapping("${api.prefix}/products")
 @RequiredArgsConstructor
 public class ProductController {
+    private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
     private final IProductService productService;
     private final LocalizationUtils localizationUtils;
 
@@ -120,7 +123,7 @@ public class ProductController {
             } else {
                 return ResponseEntity.ok()
                         .contentType(MediaType.IMAGE_JPEG)
-                        .body(new UrlResource(Paths.get("uploads/notfound.jpg").toUri()));
+                        .body(new UrlResource(Paths.get("uploads/notfound.jpeg").toUri()));
                 //return ResponseEntity.notFound().build();
             }
         } catch (Exception e) {
@@ -160,18 +163,20 @@ public class ProductController {
         // Tạo Pageable từ thông tin trang và giới hạn
         PageRequest pageRequest = PageRequest.of(
                 page, limit,
-                //Sort.by("createdAt").descending()
+//                Sort.by("createdAt").descending()
                 Sort.by("id").ascending()
         );
+        logger.info(String.format("keyword = %s, category_id = %d, page = %d, limit = %d",
+                keyword, categoryId, page, limit));
         Page<ProductResponse> productPage = productService.getAllProducts(keyword, categoryId, pageRequest);
         // Lấy tổng số trang
         int totalPages = productPage.getTotalPages();
         List<ProductResponse> products = productPage.getContent();
         return ResponseEntity.ok(ProductListResponse
-                .builder()
-                .products(products)
-                .totalPages(totalPages)
-                .build());
+                        .builder()
+                        .products(products)
+                        .totalPages(totalPages)
+                        .build());
     }
     //http://localhost:8088/api/v1/products/6
     @GetMapping("/{id}")
@@ -191,7 +196,7 @@ public class ProductController {
         //eg: 1,3,5,7
         try {
             // Tách chuỗi ids thành một mảng các số nguyên
-            List<Long> productIds = Arrays.stream(ids.split(","))//biếm chuỗi thành mảng
+            List<Long> productIds = Arrays.stream(ids.split(","))
                     .map(Long::parseLong)
                     .collect(Collectors.toList());
             List<Product> products = productService.findProductsByIds(productIds);

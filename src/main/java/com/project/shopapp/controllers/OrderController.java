@@ -1,19 +1,21 @@
 package com.project.shopapp.controllers;
 
 import com.project.shopapp.components.LocalizationUtils;
-import com.project.shopapp.dtos.CategoryDTO;
-import com.project.shopapp.dtos.OrderDTO;
+import com.project.shopapp.dtos.*;
 import com.project.shopapp.models.Order;
-import com.project.shopapp.responses.OrderResponse;
+import com.project.shopapp.responses.*;
 import com.project.shopapp.services.IOrderService;
 import com.project.shopapp.utils.MessageKeys;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
@@ -22,20 +24,18 @@ import java.util.List;
 public class OrderController {
     private final IOrderService orderService;
     private final LocalizationUtils localizationUtils;
-    @PostMapping("") // http://localhost:8088/api/v1/orders
+    @PostMapping("")
     public ResponseEntity<?> createOrder(
             @Valid @RequestBody OrderDTO orderDTO,
-            BindingResult result) {
+            BindingResult result
+    ) {
         try {
-            if (result.hasErrors()) {//// Kiểm tra xem có lỗi kiểm tra dữ liệu nào không
-                List<String> errorMessages = result.getFieldErrors()//// Lấy danh sách các FieldError từ BindingResult.
-                        .stream()//// Tạo một luồng (stream) từ danh sách các FieldError.
-                        .map(FieldError::getDefaultMessage)//// Lấy thông báo lỗi mặc định từ mỗi FieldError.
-                        .toList();//// Thu thập các thông báo lỗi vào một danh sách.
-                return ResponseEntity.badRequest().body(errorMessages);//// sử ding để trả về một phản hồi HTTP với mã
-                                                                       //// trạng thái 400 (Bad Request) cùng với một
-                                                                       //// nội dung cụ thể trong phần thân của phản hồi
-                                                                       //// (body).
+            if(result.hasErrors()) {
+                List<String> errorMessages = result.getFieldErrors()
+                        .stream()
+                        .map(FieldError::getDefaultMessage)
+                        .toList();
+                return ResponseEntity.badRequest().body(errorMessages);
             }
             Order orderResponse = orderService.createOrder(orderDTO);
             return ResponseEntity.ok(orderResponse);
@@ -43,7 +43,6 @@ public class OrderController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-
     @GetMapping("/user/{user_id}") // Thêm biến đường dẫn "user_id"
     //GET http://localhost:8088/api/v1/orders/user/4
     public ResponseEntity<?> getOrders(@Valid @PathVariable("user_id") Long userId) {
@@ -80,9 +79,36 @@ public class OrderController {
         }
     }
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteOrder(@Valid @PathVariable Long id) {
+    public ResponseEntity<?> deleteOrder(@Valid @PathVariable Long id) {
         //xóa mềm => cập nhật trường active = false
         orderService.deleteOrder(id);
-        return ResponseEntity.ok(localizationUtils.getLocalizedMessage(MessageKeys.DELETE_ORDER_SUCCESSFULLY));
+        String result = localizationUtils.getLocalizedMessage(
+                MessageKeys.DELETE_ORDER_SUCCESSFULLY, id);
+        return ResponseEntity.ok().body(result);
+    }
+    @GetMapping("/get-orders-by-keyword")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<OrderListResponse> getOrdersByKeyword(
+            @RequestParam(defaultValue = "", required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        // Tạo Pageable từ thông tin trang và giới hạn
+        PageRequest pageRequest = PageRequest.of(
+                page, limit,
+                //Sort.by("createdAt").descending()
+                Sort.by("id").ascending()
+        );
+        Page<OrderResponse> orderPage = orderService
+                                        .getOrdersByKeyword(keyword, pageRequest)
+                                        .map(OrderResponse::fromOrder);
+        // Lấy tổng số trang
+        int totalPages = orderPage.getTotalPages();
+        List<OrderResponse> orderResponses = orderPage.getContent();
+        return ResponseEntity.ok(OrderListResponse
+                .builder()
+                .orders(orderResponses)
+                .totalPages(totalPages)
+                .build());
     }
 }

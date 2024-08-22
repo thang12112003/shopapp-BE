@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.CorsConfigurer;
@@ -24,17 +25,18 @@ import java.util.List;
 import static org.springframework.http.HttpMethod.*;
 
 @Configuration
-@EnableWebSecurity
+//@EnableMethodSecurity
+@EnableWebSecurity(debug = true)
+@EnableGlobalMethodSecurity(prePostEnabled = true)
 @EnableWebMvc
 @RequiredArgsConstructor
 public class WebSecurityConfig {
     private final JwtTokenFilter jwtTokenFilter;
-
     @Value("${api.prefix}")
     private String apiPrefix;
-
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    //Pair.of(String.format("%s/products", apiPrefix), "GET"),
+    public SecurityFilterChain securityFilterChain(HttpSecurity http)  throws Exception{
         http
                 .addFilterBefore(jwtTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(requests -> {
@@ -42,8 +44,8 @@ public class WebSecurityConfig {
                             .requestMatchers(
                                     String.format("%s/users/register", apiPrefix),
                                     String.format("%s/users/login", apiPrefix)
-                            ).permitAll()
-
+                            )
+                            .permitAll()
                             .requestMatchers(GET,
                                     String.format("%s/roles**", apiPrefix)).permitAll()
 
@@ -70,12 +72,6 @@ public class WebSecurityConfig {
 
                             .requestMatchers(GET,
                                     String.format("%s/products/images/*", apiPrefix)).permitAll()
-
-                            .requestMatchers(POST,
-                                    String.format("%s/products/uploads/*", apiPrefix)).permitAll()
-
-                            .requestMatchers(GET,
-                                    String.format("%s/products/uploads/*", apiPrefix)).permitAll()
 
                             .requestMatchers(POST,
                                     String.format("%s/products**", apiPrefix)).hasAnyRole(Role.ADMIN)
@@ -110,10 +106,15 @@ public class WebSecurityConfig {
                             .requestMatchers(DELETE,
                                     String.format("%s/order_details/**", apiPrefix)).hasRole(Role.ADMIN)
 
+                            .requestMatchers(GET,
+                                    String.format("%s/healthcheck/**", apiPrefix)).permitAll()
+
+
                             .anyRequest().authenticated();
+                            //.anyRequest().permitAll();
+
                 })
                 .csrf(AbstractHttpConfigurer::disable);
-
         http.cors(new Customizer<CorsConfigurer<HttpSecurity>>() {
             @Override
             public void customize(CorsConfigurer<HttpSecurity> httpSecurityCorsConfigurer) {

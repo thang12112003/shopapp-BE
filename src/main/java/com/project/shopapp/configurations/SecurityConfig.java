@@ -1,5 +1,6 @@
 package com.project.shopapp.configurations;
 
+import com.project.shopapp.models.User;
 import com.project.shopapp.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -13,7 +14,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-@Configuration//sẽ khởi tạo từ đầu và đc sử dụng chung @Bean
+@Configuration
 
 @RequiredArgsConstructor
 public class SecurityConfig {
@@ -21,7 +22,7 @@ public class SecurityConfig {
     //user's detail object
     @Bean
     public UserDetailsService userDetailsService() {
-        return phoneNumber -> userRepository//Nhận số điện thoại và tìm kiếm người dùng trong UserRepository.
+        return phoneNumber -> userRepository
                 .findByPhoneNumber(phoneNumber)
                 .orElseThrow(() ->
                         new UsernameNotFoundException(
@@ -30,16 +31,16 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }//Sử dụng BCryptPasswordEncoder để mã hóa mật khẩu.
+    }
     @Bean
-    public AuthenticationProvider authenticationProvider() {//ác thực thông tin người dùng.
+    public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setUserDetailsService(userDetailsService());
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
     @Bean
-    public AuthenticationManager authenticationManager(//quản lý quá trình xác thực
+    public AuthenticationManager authenticationManager(
             AuthenticationConfiguration config
     ) throws Exception {
         return config.getAuthenticationManager();

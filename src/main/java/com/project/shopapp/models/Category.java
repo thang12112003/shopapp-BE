@@ -10,13 +10,12 @@ import lombok.*;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder//hàm khởi tạo thành phần thuộc tính
+@Builder
 public class Category {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)//tự tăng lên 1 để k trùng
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false)//name trong db k đc null
+    @Column(name = "name", nullable = false)
     private String name;
 }
-
